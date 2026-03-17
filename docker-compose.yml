@@ -1,0 +1,16 @@
+services:
+  google-keep-api:
+    build: .
+    container_name: google-keep-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - GOOGLE_EMAIL=${GOOGLE_EMAIL}
+      - GOOGLE_MASTER_TOKEN=${GOOGLE_MASTER_TOKEN}
+    networks:
+      - openclaw
+
+networks:
+  openclaw:
+    external: true

@@ -1,12 +1,12 @@
 ---
 name: google-keep
-description: Read notes, lists, and labels from Google Keep via a local REST API.
+description: Read, create, edit, and archive notes and lists in Google Keep via a local REST API. Deletes are not supported.
 allowed-tools: Bash
 ---
 
-# Google Keep (Read-Only)
+# Google Keep
 
-Use this skill to read the user's Google Keep notes and lists.
+Use this skill to read and manage the user's Google Keep notes and lists. Notes can be created, edited, and archived, but not deleted.
 
 The API runs at `http://google-keep-api:8080` (docker-compose service name) or `http://localhost:8080` when running locally.
 
@@ -17,6 +17,9 @@ The API runs at `http://google-keep-api:8080` (docker-compose service name) or `
 | GET | `/notes` | List all notes |
 | GET | `/notes/{id}` | Get a single note by ID |
 | GET | `/notes/search/query?q=<text>` | Search notes by text |
+| POST | `/notes` | Create a new note or list |
+| PATCH | `/notes/{id}` | Edit an existing note |
+| POST | `/notes/{id}/archive` | Archive a note |
 | GET | `/labels` | List all labels |
 | POST | `/sync` | Force sync with Google Keep |
 
@@ -54,10 +57,60 @@ Get a single note:
 curl http://localhost:8080/notes/<note_id>
 ```
 
+Create a note:
+```bash
+curl -X POST http://localhost:8080/notes \
+  -H "Content-Type: application/json" \
+  -d '{"title": "My Note", "text": "Some content", "pinned": false}'
+```
+
+Create a list note:
+```bash
+curl -X POST http://localhost:8080/notes \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Shopping", "kind": "list"}'
+```
+
+Edit a note (only provided fields are updated):
+```bash
+curl -X PATCH http://localhost:8080/notes/<note_id> \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Updated Title", "pinned": true}'
+```
+
+Archive a note:
+```bash
+curl -X POST http://localhost:8080/notes/<note_id>/archive
+```
+
 List all labels:
 ```bash
 curl http://localhost:8080/labels
 ```
+
+## Request Body for `POST /notes`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `title` | string | `""` | Note title |
+| `text` | string | `""` | Note body text |
+| `pinned` | boolean | `false` | Pin the note |
+| `color` | string | `null` | Color (e.g. `"white"`, `"red"`, `"yellow"`, `"green"`, `"blue"`) |
+| `labels` | array of strings | `[]` | Label names to apply (must already exist) |
+| `kind` | string | `"note"` | `"note"` or `"list"` |
+
+## Request Body for `PATCH /notes/{id}`
+
+All fields are optional; only provided fields are updated.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | string | New title |
+| `text` | string | New body text |
+| `pinned` | boolean | Pin or unpin |
+| `archived` | boolean | Archive or unarchive |
+| `color` | string | New color |
+| `labels` | array of strings | Replace label set (must already exist) |
 
 ## Response Shape
 

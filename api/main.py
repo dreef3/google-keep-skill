@@ -36,8 +36,19 @@ def get_keep() -> gkeepapi.Keep:
 
 
 class ListItemOut(BaseModel):
+    id: str
     text: str
     checked: bool
+
+
+class ListItemIn(BaseModel):
+    text: str
+    checked: bool = False
+
+
+class ListItemUpdate(BaseModel):
+    text: Optional[str] = None
+    checked: Optional[bool] = None
 
 
 class NoteCreate(BaseModel):
@@ -47,6 +58,7 @@ class NoteCreate(BaseModel):
     color: Optional[str] = None
     labels: list[str] = []
     kind: str = "note"  # "note" or "list"
+    items: list[ListItemIn] = []  # initial items for list notes
 
 
 class NoteUpdate(BaseModel):
@@ -97,7 +109,7 @@ def _serialize_note(note) -> dict:
     kind = "list" if isinstance(note, gkeepapi.node.List) else "note"
     items = None
     if kind == "list":
-        items = [{"text": item.text, "checked": item.checked} for item in note.items]
+        items = [{"id": item.id, "text": item.text, "checked": item.checked} for item in note.items]
     return {
         "id": note.id,
         "title": note.title,
@@ -179,8 +191,8 @@ def create_note(body: NoteCreate):
     k = get_keep()
     if body.kind == "list":
         note = k.createList(body.title, [])
-        if body.text:
-            note.text = body.text
+        for item in body.items:
+            note.add(item.text, item.checked)
     else:
         note = k.createNote(body.title, body.text)
     note.pinned = body.pinned
@@ -247,6 +259,58 @@ def remove_collaborator(note_id: str, email: str):
     if note is None:
         raise HTTPException(status_code=404, detail="Note not found")
     note.collaborators.remove(email)
+    k.sync()
+    return _serialize_note(note)
+
+
+def _get_list_note(k, note_id: str):
+    note = k.get(note_id)
+    if note is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if not isinstance(note, gkeepapi.node.List):
+        raise HTTPException(status_code=400, detail="Note is not a list")
+    return note
+
+
+def _get_list_item(note, item_id: str):
+    item = next((i for i in note.items if i.id == item_id), None)
+    if item is None:
+        raise HTTPException(status_code=404, detail="List item not found")
+    return item
+
+
+@app.post("/notes/{note_id}/items", response_model=NoteOut, status_code=201)
+def add_items(note_id: str, body: list[ListItemIn]):
+    """Append one or more items to a list note."""
+    k = get_keep()
+    note = _get_list_note(k, note_id)
+    for item in body:
+        note.add(item.text, item.checked)
+    k.sync()
+    return _serialize_note(note)
+
+
+@app.patch("/notes/{note_id}/items/{item_id}", response_model=NoteOut)
+def update_item(note_id: str, item_id: str, body: ListItemUpdate):
+    """Update the text and/or checked state of a list item."""
+    k = get_keep()
+    note = _get_list_note(k, note_id)
+    item = _get_list_item(note, item_id)
+    if body.text is not None:
+        item.text = body.text
+    if body.checked is not None:
+        item.checked = body.checked
+    k.sync()
+    return _serialize_note(note)
+
+
+@app.delete("/notes/{note_id}/items/{item_id}", response_model=NoteOut)
+def delete_item(note_id: str, item_id: str):
+    """Delete a list item."""
+    k = get_keep()
+    note = _get_list_note(k, note_id)
+    item = _get_list_item(note, item_id)
+    item.delete()
     k.sync()
     return _serialize_note(note)
 

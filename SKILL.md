@@ -6,7 +6,7 @@ allowed-tools: Bash
 
 # Google Keep
 
-Use this skill to read and manage the user's Google Keep notes and lists. Notes can be created, edited, archived, and shared with collaborators, but not deleted.
+Use this skill to read and manage the user's Google Keep notes and lists. Notes can be created, edited, archived, and shared with collaborators, but not deleted. List notes support full item management (add, edit, delete items).
 
 The API runs at `http://google-keep-api:8080` (docker-compose service name) or `http://localhost:8080` when running locally.
 
@@ -22,6 +22,9 @@ The API runs at `http://google-keep-api:8080` (docker-compose service name) or `
 | POST | `/notes/{id}/archive` | Archive a note |
 | POST | `/notes/{id}/collaborators` | Add a collaborator by email |
 | DELETE | `/notes/{id}/collaborators/{email}` | Remove a collaborator |
+| POST | `/notes/{id}/items` | Append items to a list note |
+| PATCH | `/notes/{id}/items/{item_id}` | Update a list item's text or checked state |
+| DELETE | `/notes/{id}/items/{item_id}` | Delete a list item |
 | GET | `/labels` | List all labels |
 | POST | `/sync` | Force sync with Google Keep |
 
@@ -66,11 +69,11 @@ curl -X POST http://localhost:8080/notes \
   -d '{"title": "My Note", "text": "Some content", "pinned": false}'
 ```
 
-Create a list note:
+Create a list note with initial items:
 ```bash
 curl -X POST http://localhost:8080/notes \
   -H "Content-Type: application/json" \
-  -d '{"title": "Shopping", "kind": "list"}'
+  -d '{"title": "Shopping", "kind": "list", "items": [{"text": "Milk"}, {"text": "Eggs", "checked": false}]}'
 ```
 
 Edit a note (only provided fields are updated):
@@ -97,6 +100,32 @@ Remove a collaborator:
 curl -X DELETE http://localhost:8080/notes/<note_id>/collaborators/friend@example.com
 ```
 
+Add items to an existing list note:
+```bash
+curl -X POST http://localhost:8080/notes/<note_id>/items \
+  -H "Content-Type: application/json" \
+  -d '[{"text": "Butter"}, {"text": "Bread", "checked": false}]'
+```
+
+Check off a list item (use item `id` from the note response):
+```bash
+curl -X PATCH http://localhost:8080/notes/<note_id>/items/<item_id> \
+  -H "Content-Type: application/json" \
+  -d '{"checked": true}'
+```
+
+Edit a list item's text:
+```bash
+curl -X PATCH http://localhost:8080/notes/<note_id>/items/<item_id> \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Whole milk"}'
+```
+
+Delete a list item:
+```bash
+curl -X DELETE http://localhost:8080/notes/<note_id>/items/<item_id>
+```
+
 List all labels:
 ```bash
 curl http://localhost:8080/labels
@@ -107,11 +136,12 @@ curl http://localhost:8080/labels
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `title` | string | `""` | Note title |
-| `text` | string | `""` | Note body text |
+| `text` | string | `""` | Note body text (plain notes only) |
 | `pinned` | boolean | `false` | Pin the note |
 | `color` | string | `null` | Color (e.g. `"white"`, `"red"`, `"yellow"`, `"green"`, `"blue"`) |
 | `labels` | array of strings | `[]` | Label names to apply (must already exist) |
 | `kind` | string | `"note"` | `"note"` or `"list"` |
+| `items` | array of `{text, checked}` | `[]` | Initial items for list notes |
 
 ## Request Body for `PATCH /notes/{id}`
 
@@ -126,6 +156,24 @@ All fields are optional; only provided fields are updated.
 | `color` | string | New color |
 | `labels` | array of strings | Replace label set (must already exist) |
 
+## Request Body for `POST /notes/{id}/items`
+
+Array of item objects:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `text` | string | — | Item text (required) |
+| `checked` | boolean | `false` | Whether the item is checked |
+
+## Request Body for `PATCH /notes/{id}/items/{item_id}`
+
+All fields are optional:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | string | New item text |
+| `checked` | boolean | Check or uncheck the item |
+
 ## Response Shape
 
 Each note object contains:
@@ -139,4 +187,6 @@ Each note object contains:
 - `labels` — array of label name strings
 - `collaborators` — array of collaborator email strings
 - `kind` — `"note"` or `"list"`
-- `items` — array of `{text, checked}` objects (only present for list notes)
+- `items` — array of `{id, text, checked}` objects (only present for list notes)
+
+Use item `id` values from the `items` array when calling the item PATCH/DELETE endpoints.

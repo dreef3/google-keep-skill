@@ -1,12 +1,12 @@
 ---
 name: google-keep
-description: Read, create, edit, and archive notes and lists in Google Keep via a local REST API. Deletes are not supported.
+description: Read, create, edit, archive, and share notes and lists in Google Keep via a local REST API. Deletes are not supported.
 allowed-tools: Bash
 ---
 
 # Google Keep
 
-Use this skill to read and manage the user's Google Keep notes and lists. Notes can be created, edited, and archived, but not deleted.
+Use this skill to read and manage the user's Google Keep notes and lists. Notes can be created, edited, archived, and shared with collaborators, but not deleted.
 
 The API runs at `http://google-keep-api:8080` (docker-compose service name) or `http://localhost:8080` when running locally.
 
@@ -20,6 +20,8 @@ The API runs at `http://google-keep-api:8080` (docker-compose service name) or `
 | POST | `/notes` | Create a new note or list |
 | PATCH | `/notes/{id}` | Edit an existing note |
 | POST | `/notes/{id}/archive` | Archive a note |
+| POST | `/notes/{id}/collaborators` | Add a collaborator by email |
+| DELETE | `/notes/{id}/collaborators/{email}` | Remove a collaborator |
 | GET | `/labels` | List all labels |
 | POST | `/sync` | Force sync with Google Keep |
 
@@ -83,6 +85,18 @@ Archive a note:
 curl -X POST http://localhost:8080/notes/<note_id>/archive
 ```
 
+Share a note with a collaborator:
+```bash
+curl -X POST http://localhost:8080/notes/<note_id>/collaborators \
+  -H "Content-Type: application/json" \
+  -d '{"email": "friend@example.com"}'
+```
+
+Remove a collaborator:
+```bash
+curl -X DELETE http://localhost:8080/notes/<note_id>/collaborators/friend@example.com
+```
+
 List all labels:
 ```bash
 curl http://localhost:8080/labels
@@ -123,19 +137,6 @@ Each note object contains:
 - `trashed` — boolean
 - `color` — color string (e.g. "white", "red")
 - `labels` — array of label name strings
+- `collaborators` — array of collaborator email strings
 - `kind` — `"note"` or `"list"`
 - `items` — array of `{text, checked}` objects (only present for list notes)
-
-## Setup
-
-Set these environment variables before starting the container:
-
-```
-GOOGLE_EMAIL=your@gmail.com
-GOOGLE_MASTER_TOKEN=<master token from gpsoauth>
-```
-
-Start the service:
-```bash
-docker compose up -d
-```

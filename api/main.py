@@ -58,6 +58,10 @@ class NoteUpdate(BaseModel):
     labels: Optional[list[str]] = None
 
 
+class CollaboratorAdd(BaseModel):
+    email: str
+
+
 class NoteOut(BaseModel):
     id: str
     title: str
@@ -67,6 +71,7 @@ class NoteOut(BaseModel):
     trashed: bool
     color: str
     labels: list[str]
+    collaborators: list[str]
     items: Optional[list[ListItemOut]] = None  # only for list notes
     kind: str  # "note" or "list"
 
@@ -102,6 +107,7 @@ def _serialize_note(note) -> dict:
         "trashed": note.trashed,
         "color": note.color.value if note.color else "white",
         "labels": labels,
+        "collaborators": note.collaborators.all(),
         "items": items,
         "kind": kind,
     }
@@ -217,6 +223,30 @@ def archive_note(note_id: str):
     if note is None:
         raise HTTPException(status_code=404, detail="Note not found")
     note.archived = True
+    k.sync()
+    return _serialize_note(note)
+
+
+@app.post("/notes/{note_id}/collaborators", response_model=NoteOut)
+def add_collaborator(note_id: str, body: CollaboratorAdd):
+    """Add a collaborator to a note by email."""
+    k = get_keep()
+    note = k.get(note_id)
+    if note is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    note.collaborators.add(body.email)
+    k.sync()
+    return _serialize_note(note)
+
+
+@app.delete("/notes/{note_id}/collaborators/{email}", response_model=NoteOut)
+def remove_collaborator(note_id: str, email: str):
+    """Remove a collaborator from a note."""
+    k = get_keep()
+    note = k.get(note_id)
+    if note is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    note.collaborators.remove(email)
     k.sync()
     return _serialize_note(note)
 
